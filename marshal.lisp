@@ -69,7 +69,28 @@
 (defun marshal (value type stack-item cont)
   (funcall (marshaller value type) value stack-item cont))
 
+;; FIXME: trying to reuse the marshaller causes memory fault
+
 (defun marshaller (obj <type>)
+  (marshaller-2 (type-of obj)
+                (when (typep obj 'qobject)
+                  (qobject-class obj))
+                <type>))
+
+#+nil
+(let ((marshaller-table (make-hash-table :test #'equal)))
+  (defun marshaller (obj <type>)
+    (let ((key (cons (type-of obj)
+                     (when (typep obj 'qobject)
+                       (qobject-class obj)))))
+      (or (gethash key marshaller-table)
+          (setf (gethash key marshaller-table)
+                (marshaller-2 (type-of obj)
+                              (when (typep obj 'qobject)
+                                (qobject-class obj))
+                              <type>))))))
+
+(defun marshaller-2 (obj-type qobject-class <type>)
   (let* ((set-thunk
           (macrolet
               ((si (slot)
@@ -85,8 +106,8 @@
             (let ((slot (qtype-stack-item-slot <type>)))
               (case slot
                 (bool  (lambda (val si) (setf (si bool) (if val 1 0))))
-                (class (if (typep obj 'qobject)
-                           (let ((<from> (qobject-class obj)))
+                (class (if qobject-class
+                           (let ((<from> qobject-class))
                              (multiple-value-bind (castfn <to>)
                                  (resolve-cast <from> (qtype-class <type>))
                                (lambda (val si)
@@ -97,21 +118,21 @@
                                    (if (typep val 'cffi:foreign-pointer)
                                        val
                                        (qobject-pointer val))))))
-                (enum (etypecase obj
-                        (integer
-                         (lambda (val si) (setf (si enum) val)))
-                        (enum
-                         (lambda (val si) (setf (si enum) (primitive-value val))))))
-                (int (etypecase obj
-                       (integer
-                        (lambda (val si) (setf (si int) val)))
-                       (enum
-                        (lambda (val si) (setf (si int) (primitive-value val))))))
-                (uint (etypecase obj
-                        (integer
-                         (lambda (val si) (setf (si uint) val)))
-                        (enum
-                         (lambda (val si) (setf (si uint) (primitive-value val))))))
+                (enum (cond ((subtypep obj-type 'integer)
+                             (lambda (val si) (setf (si enum) val)))
+                            ((subtypep obj-type 'enum)
+                             (lambda (val si) (setf (si enum) (primitive-value val))))
+                            (t (error "type mismatch: ~s for type slot ~s" obj-type slot))))
+                (int (cond ((subtypep obj-type 'integer)
+                            (lambda (val si) (setf (si int) val)))
+                           ((subtypep obj-type 'enum)
+                            (lambda (val si) (setf (si int) (primitive-value val))))
+                           (t (error "type mismatch: ~s for type slot ~s" obj-type slot))))
+                (uint (cond ((subtypep obj-type 'integer)
+                             (lambda (val si) (setf (si uint) val)))
+                            ((subtypep obj-type 'enum)
+                             (lambda (val si) (setf (si uint) (primitive-value val))))
+                            (t (error "type mismatch: ~s for type slot ~s" obj-type slot))))
                 (float (lambda (val si) (setf (si float) (float val 1.0s0))))
                 (double (lambda (val si) (setf (si double) (float val 1.0d0))))
                 ;; that leaves:
@@ -129,14 +150,14 @@
          (around-type (car around-cons))
          (around-thunk (cdr around-cons)))
     (cond
-      ((and primary-thunk (typep obj primary-type))
+      ((and primary-thunk (subtypep obj-type primary-type))
        (assert (null around-thunk))
        (named-lambda marshal-primary-outer (value stack-item cont)
          (funcall set-thunk
                   (funcall primary-thunk value)
                   stack-item)
          (funcall cont)))
-      ((and around-thunk (typep obj around-type))
+      ((and around-thunk (subtypep obj-type around-type))
        (named-lambda marshal-around-outer (value stack-item cont)
          (funcall around-thunk
                   value
