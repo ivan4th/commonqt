@@ -308,7 +308,9 @@
 
 (defun qtypep (instance thing)
   (when (stringp thing)
-    (setf thing (find-qtype thing)))
+    (setf thing (or (find-qtype thing)
+                    (find-qclass thing)
+                    (error "unknown type specifier ~s" thing))))
   (let ((kind (nth-value 2 (unbash thing))))
     (cond
       ((not (typep instance 'abstract-qobject)) nil)
