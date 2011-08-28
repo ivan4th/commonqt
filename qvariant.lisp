@@ -1,11 +1,16 @@
 (in-package :qt)
 (named-readtables:in-readtable :qt)
 
-(defmarshal (value :|QVariant|)
-  (qvariant value))
-
-(defmarshal (value :|const QVariant&|)
-  (qvariant value))
+(defmarshal (value place (:|QVariant| :|const QVariant&|) :around cont)
+  (cond ((cffi:null-pointer-p place)
+         (with-object (v (qvariant value))
+           (funcall cont v)))
+        (t
+         (#_operator= (%qobject
+                       (with-cache () (qtype-class (find-qtype "QVariant")))
+                       place)
+                      value)
+         (funcall cont place))))
 
 (defun qvariant-ptr-types ()
   (with-cache ()
@@ -39,10 +44,9 @@
            qobject)))))
 
 (define-marshalling-test (value :|QVariant|)
-  ;; FIXME: this belongs to qvariant.lisp but we need it here (and qvariant.lisp needs call stuff)
   (typecase value
     ((or string integer single-float double-float) t)
     (qobject
-       (iter (for (code . type) in (qvariant-ptr-types))
+       (iter (for (nil . type) in (qvariant-ptr-types))
              (thereis (qtypep value type))))
     (t nil)))

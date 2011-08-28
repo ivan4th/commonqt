@@ -78,18 +78,21 @@
 (defcfun "sw_windows_version" :int)
 
 (defcfun "sw_make_qbytearray" :pointer
-  (str :string))
+  (str :string)
+  (place :pointer))
 
 (defcfun "sw_delete_qbytearray" :void
   (str :string))
 
 (defcfun "sw_make_qstring" :pointer
-  (str :string))
+  (str :string)
+  (place :pointer))
 
 (defcfun "sw_delete_qstring" :void
   (qstring :pointer))
 
-(defcfun "sw_qstringlist_new" :pointer)
+(defcfun "sw_qstringlist_new" :pointer
+  (place :pointer))
 
 (defcfun "sw_qstringlist_delete" :void
   (qstringlist :pointer))
@@ -176,7 +179,7 @@
                         (concatenate 'string "sw_qlist_" (string-downcase type-name)
                                      "_" (string-downcase name))))
                  `(progn
-                    (defcfun ,(func-name "new") :pointer)
+                    (defcfun ,(func-name "new") :pointer (place :pointer))
                     (defcfun ,(func-name "delete") :void (qlist :pointer))
                     (defcfun ,(func-name "size") :int (qlist :pointer))
                     (defcfun ,(func-name "at") :pointer (qlist :pointer) (index :int))

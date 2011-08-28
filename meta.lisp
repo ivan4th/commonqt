@@ -127,15 +127,28 @@
 (defclass dynamic-member ()
   ((name :initarg :name
          :accessor dynamic-member-name)
-   (cached-arg-types :accessor dynamic-member-cached-arg-types)))
+   (cached-arg-types :accessor dynamic-member-cached-arg-types)
+   (cached-reply-type :accessor dynamic-member-cached-reply-type)))
 
 (defclass signal-member (dynamic-member)
-  ((name :initarg :name
-         :accessor dynamic-member-name)))
+  ())
 
 (defclass slot-member (dynamic-member)
   ((function :initarg :function
              :accessor dynamic-member-function)))
+
+(defclass property ()
+  ((name :initarg :name
+         :accessor entry-name)
+   (type :initarg :type
+         :accessor entry-type)
+   (read :initarg :read
+         :accessor entry-read)
+   (write :initarg :write
+          :accessor entry-write)
+   (notify :initarg :notify
+           :accessor entry-notify)
+   cached-arg-types cached-reply-type))
 
 (defmethod print-object ((instance dynamic-object) stream)
   (print-unreadable-object (instance stream :type t :identity nil)
@@ -183,7 +196,9 @@
    (generation :initform nil
                :accessor class-generation)
    (member-table :accessor class-member-table)
-   (overrides :accessor class-overrides)))
+   (overrides :accessor class-overrides)
+   (properties :initarg :properties
+               :accessor class-properties)))
 
 (defun default-overrides ()
   (let ((overrides (make-hash-table :test 'equal)))
@@ -222,7 +237,7 @@
 
 (defun initialize-qt-class
     (class next-method &rest args
-     &key qt-superclass direct-superclasses slots signals info override
+     &key qt-superclass direct-superclasses slots signals info override properties
      &allow-other-keys)
   (let* ((qt-superclass
           (if qt-superclass
@@ -258,7 +273,39 @@
                 (collect (make-instance 'override-spec
                                         :method-name method
                                         :target-function
-                                        (parse-function fun))))))
+                                        (parse-function fun)))))
+         (properties
+          (loop for prop in properties
+                collect (destructuring-bind (name type &key
+                                             (read (error "must specify :READ for property ~A"
+                                                          name))
+                                             write notify)
+                            prop
+                          (make-instance 'property
+                                         :name name
+                                         :type type
+                                         :read (if (symbolp read)
+                                                   #'(lambda (object)
+                                                       (slot-value object read))
+                                                   (parse-function read))
+                                         :write (cond ((null write) nil)
+                                                      ((eql write t)
+                                                       (unless (symbolp read)
+                                                         (error "READ spec must be a symbol if T is used for WRITE"))
+                                                       #'(lambda (new-value object)
+                                                           (setf (slot-value object read) new-value)))
+                                                      ((symbolp write)
+                                                       #'(lambda (new-value object)
+                                                           (setf (slot-value object write) new-value)))
+                                                      (t
+                                                       (parse-function write)))
+                                         :notify
+                                         (when notify
+                                           (or (position notify signals
+                                                         :key #'dynamic-member-name
+                                                         :test #'equal)
+                                               (error "bad notification signal ~A for property ~A"
+                                                      notify name))))))))
     (apply next-method
            class
            :allow-other-keys t
@@ -268,6 +315,7 @@
            :signals signals
            :class-infos class-infos
            :override-specs override-specs
+           :properties properties
            args)))
 
 (defmethod initialize-instance ((instance qt-class) &rest args
@@ -281,6 +329,11 @@
   (let ((table (class-member-table qt-class)))
     (when (< id (length table))
       (elt table id))))
+
+(defun get-qt-class-property (qt-class id)
+  (let ((props (class-properties qt-class)))
+    (when (< id (length props))
+      (elt props id))))
 
 (defun make-override-table (specs)
   (let ((table (make-hash-table :test 'equal)))
@@ -373,7 +426,8 @@
                                (mapcar #'convert-dynamic-member
                                        (class-signals qt-class))
                                (mapcar #'convert-dynamic-member
-                                       (class-slots qt-class)))))
+                                       (class-slots qt-class))
+                               (class-properties qt-class))))
       ;; invalidate call site caches
       (setf generation (gensym))
       ;; mark as fresh
@@ -438,13 +492,13 @@
     nil))
 
 (defun qt_metacall-override (object call id stack)
-  (let ((new-id (call-next-qmethod)))
+  (let ((c (primitive-value call))
+        (new-id (call-next-qmethod)))
     (cond
-      ((or (minusp new-id)
-           (not (eql (primitive-value call)
-                     (primitive-value (#_QMetaObject::InvokeMetaMethod)))))
+      ((minusp new-id)
+       ;; or should it be new-id?
        id)
-      (t
+      ((eql c (primitive-value (#_QMetaObject::InvokeMetaMethod)))
        (let ((member
               (or
                (get-qt-class-member (class-of object) new-id)
@@ -458,10 +512,32 @@
                          stack)
             -1)
            (slot-member
+            ;; TBD: marshal back slot value???
             (apply (dynamic-member-function member)
                    object
                    (unmarshal-slot-args member stack))
-            -1)))))))
+            -1))))
+      ((eql c (primitive-value (#_QMetaObject::ReadProperty)))
+       (let ((prop (or (get-qt-class-property (class-of object) new-id)
+                       (error "QT_METACALL-OVERRIDE: invalid property id ~A" id))))
+         (assign
+          (funcall (entry-read prop) object)
+          (or (find-qtype (entry-type prop))
+              (error "bad property type: ~s" (entry-type prop)))
+          (cffi:mem-aref stack :pointer 0))
+         -1))
+      ((eql c (primitive-value (#_QMetaObject::WriteProperty)))
+       (let ((prop (or (get-qt-class-property (class-of object) new-id)
+                       (error "QT_METACALL-OVERRIDE: invalid property id ~A" id))))
+         (if (entry-write prop)
+             (let ((new-value (first (unmarshal-slot-args prop stack))))
+               (funcall (entry-write prop) new-value object))
+             (warn "QT_METACALL-OVERRIDE: trying to assign read-only property ~A of ~A"
+                   (entry-name prop) object))
+         -1))
+      (t
+       ;; or should it be new-id?
+       id))))
 
 (defun guess-stack-item-slot (x)
   (case x
@@ -471,21 +547,40 @@
     (:|QString| 'ptr)
     (t (error "don't know how to unmarshal slot argument ~A" x))))
 
-(defun ensure-dynamic-member-types (member)
-  (with-slots (cached-arg-types) member
-    (unless (slot-boundp member 'cached-arg-types)
-      (setf cached-arg-types
-            (mapcar (lambda (name)
-		      (or (find-qtype name)
-			  (error "no smoke type found for dynamic member arg type ~A.  Giving up."
-				 name)))
-                    (cl-ppcre:split
-                     ","
-                     (entry-arg-types (convert-dynamic-member member))))))
-    cached-arg-types))
+;; FIXME: hairy late-night sleep-deprived coding
+
+(defgeneric arg-type-names (member)
+  (:method ((member dynamic-member))
+    (cl-ppcre:split
+     ","
+     (entry-arg-types (convert-dynamic-member member))))
+  (:method ((prop property))
+    (list (entry-type prop))))
+
+(defgeneric reply-type (member)
+  (:method ((member dynamic-member))
+    ;; FIXME
+    nil)
+  (:method ((prop property))
+    nil))
+
+(defun ensure-member-types (member)
+  (flet ((resolve-type (name)
+           (or (find-qtype name)
+               (error "no smoke type found for dynamic member arg type ~A.  Giving up."
+                      name))))
+    (with-slots (cached-arg-types cached-reply-type) member
+      (unless (slot-boundp member 'cached-arg-types)
+        (setf cached-arg-types
+              (mapcar #'resolve-type
+                      (arg-type-names member))
+              cached-reply-type
+              (alexandria:when-let ((rt (reply-type member)))
+                (resolve-type rt))))
+      (values cached-arg-types cached-reply-type))))
 
 (defun unmarshal-slot-args (member argv)
-  (iter (for type in (ensure-dynamic-member-types member))
+  (iter (for type in (ensure-member-types member))
         (for i from 1)
         (collect (cond ((eq (qtype-interned-name type) ':|QString|)
                         (qstring-pointer-to-lisp
@@ -498,6 +593,21 @@
                                                              (cffi:foreign-type-size :pointer)))))
                        (t
                         (unmarshal type (cffi:mem-aref argv :pointer i)))))))
+
+#+nil
+(defun marshal-reply (member argv)
+  ;; problems:
+  ;; 1. putting stuff to the stack seems to involve calling copy constructor in some cases
+  ;; 2. MARSHAL destroys marshalled objects upon return
+  ;; SOLUTION: *_new() functions in commonqt.cpp should accept extra parameter
+  ;; void* place. if it's not null, value assignment should be done to that place
+  ;; using reinterpret_cast<>
+  ;; Marshalling code should accept target place too and shouldn't destruct
+  ;; the target if place was specified.
+  ;; (some macrology may help, too)
+  ;; Marshalling tests should be updated to check for the copy mode.
+  ;; char* / const char* shouldn't be subject to copy-based serialization
+  )
 
 (defclass class-info ()
   ((key :initarg :key
@@ -540,8 +650,42 @@
 (defconstant +MethodCompatibility+ #x10)
 (defconstant +MethodCloned+ #x20)
 (defconstant +MethodScriptable+ #x40)
+(defconstant +Readable+ #x01)
+(defconstant +Writable+ #x02)
+(defconstant +Designable+ #x00001000)
+(defconstant +Scriptable+ #x00004000)
+(defconstant +Stored+ #x00010000)
+(defconstant +ResolveEditable+ #x00080000)
+(defconstant +Notify+ #x00400000)
 
-(defun make-metaobject (parent class-name class-infos signals slots)
+(defun meta-type-value (type-name)
+  ;; based on the idea from qvariant_type-nameToType() from generator.cpp in moc
+  (cond ((string= "QVariant" type-name) #xffffffff)
+        ((string= "QCString" type-name)
+         (primitive-value (#_QMetaType::QByteArray)))
+        ((string= "Q_LLONG" type-name)
+         (primitive-value (#_QMetaType::LongLong)))
+        ((string= "Q_ULLONG" type-name)
+         (primitive-value (#_QMetaType::ULongLong)))
+        ((string= "QIconSet" type-name)
+         (primitive-value (#_QMetaType::QIcon)))
+        (t
+         (let ((tp (#_QMetaType::type type-name)))
+           (if (< tp (primitive-value (#_QMetaType::User))) tp 0)))))
+
+(defun property-flags (prop)
+  (logior (ash (meta-type-value (entry-type prop)) 24)
+          +Readable+
+          (if (entry-write prop) +Writable+ 0)
+          ;; FIXME: these should be configurable
+          +Designable+
+          +Scriptable+
+          +Stored+
+          +ResolveEditable+ ;; FIXME: cargo cult...
+          (if (entry-notify prop) +Notify+ 0)))
+
+;; FIXME: rm &optional
+(defun make-metaobject (parent class-name class-infos signals slots properties)
   (let ((data (make-array 0 :fill-pointer 0 :adjustable t))
         (table (make-hash-table))
         (stream (make-string-output-stream)))
@@ -560,8 +704,11 @@
       (add (if (plusp (length class-infos)) 10 0))
       (add (+ (length signals) (length slots)))
       (add (+ 10 (* 2 (length class-infos)))) ;methods
-      (add 0)                                 ;properties
-      (add 0)
+      (add (length properties))
+      (add (if properties
+               (+ 10 (* 2 (length class-infos))
+                  (* 5 (+ (length signals) (length slots))))
+               0))                      ;properties
       (add 0)                           ;enums/sets
       (add 0)
       (dolist (entry class-infos)
@@ -579,6 +726,13 @@
         (add-string (entry-reply-type entry))
         (add-string "")                 ;tag
         (add (logior +methodslot+ +accesspublic+)))
+      (dolist (entry properties)
+        (add-string (entry-name entry))
+        (add-string (entry-type entry))
+        (add (property-flags entry)))
+      (when (some #'entry-notify properties)
+        (dolist (entry properties)
+          (add (or (entry-notify entry) 0))))
       (add 0))
     (let ((dataptr (cffi:foreign-alloc :int :count (length data))))
       (dotimes (i (length data))

@@ -2,6 +2,7 @@
 //
 // See LICENSE for details.
 //
+// TBD: as workaround for SBCL: don't invoke callbacks when not in an SBCL thread
 #include <smoke.h>
 #include <smoke/qtcore_smoke.h>
 #include <QtCore>
@@ -142,8 +143,12 @@ sw_windows_version()
 // }
 
 void*
-sw_make_qbytearray(char* str)
+sw_make_qbytearray(char* str, void* place)
 {
+        if (place) {
+                *reinterpret_cast<QByteArray*>(place) = QByteArray(str);
+                return place;
+        }
         return new QByteArray(str);
 }
 
@@ -154,8 +159,12 @@ sw_delete_qbytearray(void *q)
 }
 
 void*
-sw_make_qstring(char *str)
+sw_make_qstring(char *str, void* place)
 {
+        if (place) {
+                *reinterpret_cast<QString*>(place) = QString::fromUtf8(str);
+                return place;
+        }
         return new QString(QString::fromUtf8(str));
 }
 
@@ -245,8 +254,12 @@ sw_id_class(Smoke *smoke, char *name, bool external)
 // QStringList marshalling
 
 void*
-sw_qstringlist_new()
+sw_qstringlist_new(void *place)
 {
+        if (place) {
+                *reinterpret_cast<QStringList*>(place) = QStringList();
+                return place;
+        }
         return new QStringList();
 }
 
@@ -277,8 +290,12 @@ sw_qstringlist_append(void *q, char *x)
 // QList<Something*> marshalling
 
 void*
-sw_qlist_void_new()
+sw_qlist_void_new(void *place)
 {
+        if (place) {
+                *reinterpret_cast<QList<void*>*>(place) = QList<void*>();
+                return place;
+        }
 	return new QList<void*>;
 }
 
@@ -314,8 +331,12 @@ sw_qlist_void_append(void *ptr, void *whatptr)
 
 #define DEFINE_QLIST_SCALAR_MARSHALLER(ELEMENT_TYPE, NAME) \
   void* \
-  sw_qlist_##NAME##_new() \
+  sw_qlist_##NAME##_new(void * place) \
   { \
+          if (place) { \
+                  *reinterpret_cast<QList<ELEMENT_TYPE>*>(place) = QList<ELEMENT_TYPE>(); \
+                  return place; \
+          } \
           return new QList<ELEMENT_TYPE>; \
   } \
   int \

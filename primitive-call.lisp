@@ -300,17 +300,19 @@
             (next-thunk (argstep-marshaller (cdr for-values)
                                             (cdr argtypes)
                                             (1+ i))))
-        (lambda (stack arglist final-cont)
+        (lambda (stack arglist no-dealloc final-cont)
           (funcall marshal-thunk
                    (car arglist)
                    (cffi:mem-aref stack '|union StackItem| i)
+                   no-dealloc
                    (lambda ()
                      (funcall next-thunk
                               stack
                               (cdr arglist)
+                              no-dealloc
                               final-cont)))))
-      (lambda (stack arglist final-cont)
-        (declare (ignore arglist))
+      (lambda (stack arglist no-dealloc final-cont)
+        (declare (ignore arglist no-dealloc))
         (funcall final-cont stack))))
 
 (defun arglist-marshaller (for-values argtypes)
@@ -318,7 +320,7 @@
         (n (1+ (length argtypes))))
     (named-lambda arglist-marshaller (arglist final-cont)
       (cffi:with-foreign-object (stack '|union StackItem| n)
-        (funcall thunk stack arglist final-cont)))))
+        (funcall thunk stack arglist nil final-cont)))))
 
 (defun %interpret-call (allow-override-p instance method args)
   (let ((instance (full-resolve-this instance)))
