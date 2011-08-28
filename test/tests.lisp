@@ -386,3 +386,75 @@
   ("someprop" "QString" t t "somepropChanged()")
   ("anotherprop" "int" t t nil)
   ("color" "QColor" t nil "colorChanged()"))
+
+;; SBCL cannot handle foreign thread callbacks at the moment
+;; QML doesn't work there
+#-sbcl
+(progn
+  (ensure-smoke :qtdeclarative)
+
+  (defclass qml-test-object ()
+    ((v1 :accessor v1)
+     (v2 :accessor v2)
+     (v3 :accessor v3)
+     (someprop :accessor someprop :initform 42d0)
+     (last-change :accessor last-change)
+     (done-p :accessor done-p :initform nil))
+    (:metaclass qt-class)
+    (:qt-superclass "QObject")
+    (:properties ("someprop" "double"
+                             :read someprop
+                             :write t
+                             :notify "somepropChanged()"))
+    (:signals ("somepropChanged()"))
+    (:slots ("int mul10(int)"
+             (lambda (this v)
+               (declare (ignore this))
+               (* v 10)))
+            ("QString concat(QString, QString)"
+             (lambda (this a b)
+               (declare (ignore this))
+               (concatenate 'string a b)))
+            ("update(double)"
+             (lambda (this v)
+               (setf (someprop this) v)
+               (emit-signal this "somepropChanged()")))
+            ("noteChange(double)"
+             (lambda (this v)
+               (setf (last-change this) v)))
+            ("done(int, QString, double)"
+             (lambda (this v1 v2 v3)
+               (setf (done-p this) t
+                     (v1 this) v1
+                     (v2 this) v2
+                     (v3 this) v3)))))
+
+  (defmethod initialize-instance :after ((instance qml-test-object) &key parent)
+    (if parent
+        (new instance parent)
+        (new instance)))
+  
+  (deftest/qt test-declarative
+      (let ((view (#_new QDeclarativeView)))
+        (unwind-protect
+             (let ((testobj (make-instance 'qml-test-object)))
+               (with-object (url (#_new QUrl (namestring
+                                              (asdf:system-relative-pathname :qt-test "test/test1.qml"))))
+                 (#_setContextProperty (#_rootContext view) "testobj" testobj)
+                 (#_setSource view url)
+                 (when (enum= (#_status view) (#_QDeclarativeView::Error))
+                   (error "error loading qml file"))
+                 (#_show view)
+                 (iter (until (done-p testobj))
+                       (#_processEvents qapp))
+                 (values (v1 testobj) (v2 testobj) (v3 testobj)
+                         (last-change testobj))))
+          (#_delete view)))
+    1230 "abcdef" 12300d0 12300d0))
+
+;; TBD: c2mop:finalize-inheritance isn't invoked upon class redefinition
+;; (tested in CCL, perhaps this applies to SBCL too)
+;; Because of this, older signal/slot/property/etc. definitions get stuck
+;; more info: http://groups.google.com/group/comp.lang.lisp/browse_thread/thread/5dc4b144bad8b58c?pli=1
+;; Seems like REINITIALIZE-INSTANCE should redo the finalization both on
+;; the class being redefined and its subclasses.

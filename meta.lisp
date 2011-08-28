@@ -512,18 +512,21 @@
                          stack)
             -1)
            (slot-member
-            ;; TBD: marshal back slot value???
-            (apply (dynamic-member-function member)
-                   object
-                   (unmarshal-slot-args member stack))
+            (multiple-value-bind (arg-types reply-type)
+                (ensure-member-types member)
+              (let ((reply (apply (dynamic-member-function member)
+                                  object (unmarshal-slot-args member stack arg-types))))
+                (when reply-type
+                  (assign reply reply-type (cffi:mem-aref stack :pointer 0)))))
             -1))))
       ((eql c (primitive-value (#_QMetaObject::ReadProperty)))
-       (let ((prop (or (get-qt-class-property (class-of object) new-id)
-                       (error "QT_METACALL-OVERRIDE: invalid property id ~A" id))))
+       (let* ((prop (or (get-qt-class-property (class-of object) new-id)
+                        (error "QT_METACALL-OVERRIDE: invalid property id ~A" id)))
+              (reply-type (or (nth-value 1 (ensure-member-types prop))
+                              (error "bad type for property ~A" (entry-name prop)))))
          (assign
           (funcall (entry-read prop) object)
-          (or (find-qtype (entry-type prop))
-              (error "bad property type: ~s" (entry-type prop)))
+          reply-type
           (cffi:mem-aref stack :pointer 0))
          -1))
       ((eql c (primitive-value (#_QMetaObject::WriteProperty)))
@@ -559,10 +562,12 @@
 
 (defgeneric reply-type (member)
   (:method ((member dynamic-member))
-    ;; FIXME
-    nil)
+    (let ((type (entry-reply-type (convert-dynamic-member member))))
+      (if (string= "" type)
+          nil
+          type)))
   (:method ((prop property))
-    nil))
+    (entry-type prop)))
 
 (defun ensure-member-types (member)
   (flet ((resolve-type (name)
@@ -579,8 +584,8 @@
                 (resolve-type rt))))
       (values cached-arg-types cached-reply-type))))
 
-(defun unmarshal-slot-args (member argv)
-  (iter (for type in (ensure-member-types member))
+(defun unmarshal-slot-args (member argv &optional (types (ensure-member-types member)))
+  (iter (for type in types)
         (for i from 1)
         (collect (cond ((eq (qtype-interned-name type) ':|QString|)
                         (qstring-pointer-to-lisp
@@ -593,21 +598,6 @@
                                                              (cffi:foreign-type-size :pointer)))))
                        (t
                         (unmarshal type (cffi:mem-aref argv :pointer i)))))))
-
-#+nil
-(defun marshal-reply (member argv)
-  ;; problems:
-  ;; 1. putting stuff to the stack seems to involve calling copy constructor in some cases
-  ;; 2. MARSHAL destroys marshalled objects upon return
-  ;; SOLUTION: *_new() functions in commonqt.cpp should accept extra parameter
-  ;; void* place. if it's not null, value assignment should be done to that place
-  ;; using reinterpret_cast<>
-  ;; Marshalling code should accept target place too and shouldn't destruct
-  ;; the target if place was specified.
-  ;; (some macrology may help, too)
-  ;; Marshalling tests should be updated to check for the copy mode.
-  ;; char* / const char* shouldn't be subject to copy-based serialization
-  )
 
 (defclass class-info ()
   ((key :initarg :key
