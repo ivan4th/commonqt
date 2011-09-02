@@ -65,7 +65,10 @@
                              (if (alexandria:starts-with #\2 signal)
                                  (subseq signal 1)
                                  signal)))))
-    (values (#_indexOfSignal (#_metaObject sender) signal-sig)
+    (values (let ((id (#_indexOfSignal (#_metaObject sender) signal-sig)))
+              (when (minusp id)
+                (error "~A doesn't have signal ~A" sender signal))
+              id)
             signal-sig)))
 
 (defun sweep-connections (receiver)

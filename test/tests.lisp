@@ -288,6 +288,13 @@
           (connect sender "noArgs()" receiver #'no-args)
           (connect sender (QSIGNAL "oneArg(int)") #'one-arg)
           (connect sender "twoArgs(int, QString)" receiver #'two-args)
+          (let ((unexpected-success nil))
+            (handler-case
+                (progn
+                  (connect sender "noSuchSignal()" #'(lambda () (note 'error)))
+                  (setf unexpected-success t))
+              (error () nil))
+            (assert (not unexpected-success)))
           (emit-signal sender "noArgs()")
           (emit-signal sender "oneArg(int)" 42)
           (emit-signal sender "oneArg(int)" 4242)
