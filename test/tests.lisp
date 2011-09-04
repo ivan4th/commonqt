@@ -91,7 +91,7 @@
 
 (define-marshalling-test test-qvariant-marshalling
     "QVariant" t t
-  "" 123 123.25d0 "zzz" #.(make-string 3 :initial-element (code-char 1093)))
+  "" 123 123.25d0 "zzz" #.(make-string 3 :initial-element (code-char 1093)) nil t)
 
 (deftest/qt test-single-float-via-qvariant-marshalling
     (values (remarshal 0.0 "QVariant" t t)

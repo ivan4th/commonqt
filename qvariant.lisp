@@ -25,6 +25,7 @@
     (string (#_new QVariant :|const QString&| value))
     (integer (#_new QVariant :|int| value))
     ((or single-float double-float) (#_new QVariant :|double| value))
+    (boolean (#_new QVariant :|bool| value))
     (qobject
        (iter (for (code . type) in (qvariant-ptr-types))
              (when (qtypep value type)
@@ -38,6 +39,7 @@
       (2 (#_toInt qobject))
       (10 (#_toString qobject))
       (6 (#_toDouble qobject))
+      (1 (#_toBool qobject))
       (t
          (alexandria:if-let ((qclass (cdr (assoc code (qvariant-ptr-types)))))
            (%qobject qclass (#_constData qobject))
@@ -45,7 +47,7 @@
 
 (define-marshalling-test (value :|QVariant|)
   (typecase value
-    ((or string integer single-float double-float) t)
+    ((or string integer single-float double-float boolean) t)
     (qobject
        (iter (for (nil . type) in (qvariant-ptr-types))
              (thereis (qtypep value type))))
