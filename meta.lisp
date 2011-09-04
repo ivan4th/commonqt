@@ -622,13 +622,18 @@
   (let ((str (#_data (#_QMetaObject::normalizedSignature str))))
     (or
      (cl-ppcre:register-groups-bind (a b c d)
-         ("^(([\\w,<>:]*)\\s+)?([^\\s]*)\\((.*)\\)" str)
-       (declare (ignore a))
-       (make-instance 'slot-or-signal
-                      :name c
-                      :full-name (concatenate 'string c "(" d ")")
-                      :arg-types d
-                      :reply-type (if (or (null b) (equal b "void")) "" b)))
+         ("^(?:([\\w,<>:]*)(\\*|\\s+))?([^\\s]*)\\((.*)\\)" str)
+       (let ((star-p (alexandria:starts-with #\* b)))
+         (make-instance 'slot-or-signal
+                        :name c
+                        :full-name (concatenate 'string c "(" d ")")
+                        :arg-types d
+                        :reply-type (if (or (null a)
+                                            (and (not star-p)
+                                                 (equal a "void")))
+                                        ""
+                                        (concatenate 'string
+                                                     a (if star-p b ""))))))
      (error "invalid slot or signal signature: ~s" str))))
 
 (defconstant +AccessPrivate+ #x00)

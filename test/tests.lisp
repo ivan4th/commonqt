@@ -158,6 +158,14 @@
         (extract (remarshal (list a b c) "QList<QObject*>" t t))))
   ("Abc" "Def" "zzz"))
 
+(deftest/qt test-qobjectptr-marshalling
+    (let ((x (#_new QObject))
+          (y (#_new QObject)))
+      (#_setObjectName x "tst")
+      (#_setObjectName y "WrongOne")
+      (remarshal x "QObject*" t nil #'(lambda (obj) (#_objectName obj)) y))
+  "tst")
+
 (deftest/qt test-object-children
     (let* ((a (#_new QObject))
            (b (#_new QObject a))
@@ -422,6 +430,8 @@
              (lambda (this a b)
                (declare (ignore this))
                (concatenate 'string a b)))
+            ("QObject* self()"
+             (lambda (this) this))
             ("update(double)"
              (lambda (this v)
                (setf (someprop this) v)

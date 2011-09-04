@@ -17,10 +17,13 @@ Rectangle {
     }
 
     Component.onCompleted: {
-      console.log("testobj: " + testobj);
+      console.log("testobj: " + testobj + " -- " + testobj.self());
       testobj.update(123);
       var v1 = testobj.mul10(123);
-      var v2 = testobj.concat("abc", "def");
+      var v2 = testobj.concat("abc", "def")
+      // there seems to be a problem with comparing QObjects...
+      if (testobj.self().concat("abc", "def") != v2)
+        v2 = "PTRFAIL";
       testobj.done(v1, v2, fb.value);
     }
 }

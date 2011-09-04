@@ -168,6 +168,11 @@
                     (unless assignment-p
                       (funcall set-thunk new-value stack-item))
                     (funcall cont)))))
+      ((eq :pointer (qtype-kind <type>))
+       (named-lambda marshal-default (value stack-item assignment-p cont)
+         (declare (ignore assignment-p))
+         (funcall set-thunk value stack-item)
+         (funcall cont)))
       (t
        (named-lambda marshal-default (value stack-item assignment-p cont)
          (unless (and assignment-p (eq slot 'class))
