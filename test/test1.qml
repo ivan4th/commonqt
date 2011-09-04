@@ -5,14 +5,15 @@ Rectangle {
     width: 100
     height: 100
 
-    FooBar {
+    Item {
         id: fb
-        value: {
+        function v () {
             var qqq = testobj.someprop * 100;
             console.log("value becomes " + qqq);
             testobj.noteChange(qqq);
             return qqq;
         }
+        property double value: v()
     }
 
     Component.onCompleted: {
