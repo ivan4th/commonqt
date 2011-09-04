@@ -533,7 +533,8 @@
        (let ((prop (or (get-qt-class-property (class-of object) new-id)
                        (error "QT_METACALL-OVERRIDE: invalid property id ~A" id))))
          (if (entry-write prop)
-             (let ((new-value (first (unmarshal-slot-args prop stack))))
+             (let ((new-value (unmarshal-metacall-arg
+                               stack (first (ensure-member-types prop)) 0)))
                (funcall (entry-write prop) new-value object))
              (warn "QT_METACALL-OVERRIDE: trying to assign read-only property ~A of ~A"
                    (entry-name prop) object))
@@ -584,20 +585,23 @@
                 (resolve-type rt))))
       (values cached-arg-types cached-reply-type))))
 
+(defun unmarshal-metacall-arg (argv type n)
+  (cond ((eq (qtype-interned-name type) ':|QString|)
+         (qstring-pointer-to-lisp
+          (cffi:mem-aref argv :pointer n)))
+        ((and
+          (eq (qtype-kind type) :stack)
+          (eq (qtype-stack-item-slot type) 'class))
+         (unmarshal type (cffi:inc-pointer argv
+                                           (* n
+                                              (cffi:foreign-type-size :pointer)))))
+        (t
+         (unmarshal type (cffi:mem-aref argv :pointer n)))))
+
 (defun unmarshal-slot-args (member argv &optional (types (ensure-member-types member)))
   (iter (for type in types)
         (for i from 1)
-        (collect (cond ((eq (qtype-interned-name type) ':|QString|)
-                        (qstring-pointer-to-lisp
-                         (cffi:mem-aref argv :pointer i)))
-                       ((and
-                         (eq (qtype-kind type) :stack)
-                         (eq (qtype-stack-item-slot type) 'class))
-                        (unmarshal type (cffi:inc-pointer argv
-                                                          (* i
-                                                             (cffi:foreign-type-size :pointer)))))
-                       (t
-                        (unmarshal type (cffi:mem-aref argv :pointer i)))))))
+        (collect (unmarshal-metacall-arg argv type i))))
 
 (defclass class-info ()
   ((key :initarg :key

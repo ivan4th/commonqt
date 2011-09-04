@@ -24,6 +24,9 @@ Rectangle {
       // there seems to be a problem with comparing QObjects...
       if (testobj.self().concat("abc", "def") != v2)
         v2 = "PTRFAIL";
+      testobj.someprop = 4242;
+      if (testobj.someprop != 4242)
+        v2 = "PROPFAIL";
       testobj.done(v1, v2, fb.value);
     }
 }
