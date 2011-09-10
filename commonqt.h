@@ -47,6 +47,7 @@ EXPORT void* sw_qstring_to_utf8(void* s);
 EXPORT const void* sw_qstring_to_utf16(void*);
 
 EXPORT int sw_windows_version();
+EXPORT void sw_install_message_handler(QtMsgHandler handler);
 
 EXPORT void sw_find_class(char *, Smoke **, short *);
 EXPORT void sw_id_instance_class(void *, Smoke **, short *);

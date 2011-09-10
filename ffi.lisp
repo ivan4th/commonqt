@@ -77,6 +77,9 @@
 
 (defcfun "sw_windows_version" :int)
 
+(defcfun "sw_install_message_handler" :void
+  (handler :pointer))
+
 (defcfun "sw_make_qbytearray" :pointer
   (str :string)
   (place :pointer))
@@ -323,3 +326,15 @@
     :void
     ((obj :pointer))
   (funcall *ptr-callback* obj))
+
+(defvar *message-callback*)
+
+(defcallback message-callback
+    :void
+    ((message-type :int)
+     (message :string))
+  (funcall *message-callback* message-type message))
+
+(defun install-message-handler (handler)
+  (setf *message-callback* handler)
+  (sw_install_message_handler (cffi:callback message-callback)))

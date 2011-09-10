@@ -134,6 +134,11 @@ sw_windows_version()
 #endif
 }
 
+void sw_install_message_handler(QtMsgHandler handler)
+{
+     qInstallMsgHandler(handler);
+}
+
 // void*
 // sw_make_qstring(char *str)
 // {

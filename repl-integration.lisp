@@ -12,6 +12,7 @@
 (defvar *gui-thread*)
 (defvar *executer*)
 
+(defun message-handler ())
 (defclass repl-notifier ()
   ((pending-form :accessor pending-form)
    (form-result :accessor form-result)
@@ -85,6 +86,19 @@
     *print-readably* *print-right-margin*
     *package*))
 
+(defun install-debug-io-message-handler ()
+  (let ((output *debug-io*))
+    (install-message-handler
+     #'(lambda (message-type message)
+         (format output "~&QT ~A: ~A~%"
+                 (case message-type
+                   (0 "DEBUG")
+                   (1 "WARNING")
+                   (2 "CRITICAL")
+                   (3 "FATAL")
+                   (t "UNKNOWN"))
+                 message)))))
+
 (defun start-gui-thread (&optional (install-repl-hook t))
   (unless (boundp '*gui-thread*)
     (ensure-smoke :qtcore)
@@ -102,6 +116,7 @@
                                                  :notifier *notifier*))
                  (#_setQuitOnLastWindowClosed *qapp* nil)
                  (#_exec *qapp*)))))
+    (install-debug-io-message-handler)
     (when (and install-repl-hook (find-package "SWANK"))
       (let ((hooks (find-symbol "*SLIME-REPL-EVAL-HOOKS*" "SWANK")))
         (if hooks

@@ -85,7 +85,8 @@
            #:qsubclassp
            #:qtypep
            #:connect
-           #:disconnect)
+           #:disconnect
+           #:install-message-handler)
   (:import-from alexandria named-lambda))
 
 (defpackage :qt-internal)
