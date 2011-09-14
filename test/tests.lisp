@@ -202,6 +202,10 @@
   ("zz" "rr") (("01" . "bca") ("02" . "abc") ("03" . "bcq"))
   ((0 . 1) (2 . 1)) ((0 . 1) (2 . 1)))
 
+(define-marshalling-test test-map-marshalling
+  "QMap<QString,QVariant>" t t
+  () (("abc" . "zzz")) (("abc" . 123) ("def" . "qwerty")))
+
 (deftest/qt test-no-enum-confusion
     (let ((action (#_new QAction (null-qobject (find-qclass "QAction"))))
           (keys (list (#_new QKeySequence :|int| (#_Qt::Key_Backspace))

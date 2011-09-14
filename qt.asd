@@ -85,6 +85,7 @@
                  (:file "qvariant")
                  (:file "property")
                  (:file "qlist")
+                 (:file "qmap")
                  (:file "qapp")
                  (:file "connect"))
     :depends-on (:cffi :named-readtables :cl-ppcre :alexandria :closer-mop

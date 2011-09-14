@@ -194,6 +194,19 @@
   (define-qlist-marshaller-funcs qmodelindex)
   (define-qlist-marshaller-funcs qkeysequence))
 
+(macrolet ((define-qmap-marshaller-funcs (type-name)
+               (flet ((func-name (name)
+                        (concatenate 'string "sw_qmap_" (string-downcase type-name)
+                                     "_" (string-downcase name))))
+                 `(progn
+                    (defcfun ,(func-name "new") :pointer (place :pointer))
+                    (defcfun ,(func-name "delete") :void (qmap :pointer))
+                    (defcfun ,(func-name "map") :int
+                      (qmap :pointer) (func :pointer))
+                    (defcfun ,(func-name "set") :pointer
+                      (qmap :pointer) (key :pointer) (value :pointer))))))
+  (define-qmap-marshaller-funcs qstring_qvariant))
+
 (cffi:defcstruct |struct SmokeData|
   (name :string)
   (classes :pointer)
@@ -326,6 +339,14 @@
     :void
     ((obj :pointer))
   (funcall *ptr-callback* obj))
+
+(defvar *map-func*)
+
+(defcallback map-callback
+    :void
+    ((key :pointer)
+     (value :pointer))
+  (funcall *map-func* key value))
 
 (defvar *message-callback*)
 

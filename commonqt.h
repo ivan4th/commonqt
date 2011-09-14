@@ -81,6 +81,15 @@ DECLARE_QLIST_SCALAR_MARSHALLER(qbytearray)
 DECLARE_QLIST_SCALAR_MARSHALLER(qmodelindex)
 DECLARE_QLIST_SCALAR_MARSHALLER(qkeysequence)
 
+typedef void (*map_func)(const void*, const void*);
+
+#define DECLARE_QMAP_SCALAR_MARSHALLER(NAME) \
+  EXPORT void* sw_qmap_##NAME##_new(void *place); \
+  EXPORT void sw_qmap_##NAME##_delete(void *ptr); \
+  EXPORT void sw_qmap_##NAME##_map(void *ptr, map_func f); \
+  EXPORT void sw_qmap_##NAME##_set(void *ptr, void *key, void *value); \
+
+DECLARE_QMAP_SCALAR_MARSHALLER(qstring_qvariant);
 #ifdef __cplusplus
 }
 #endif

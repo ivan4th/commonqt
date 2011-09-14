@@ -374,3 +374,40 @@ DEFINE_QLIST_SCALAR_MARSHALLER(QVariant, qvariant)
 DEFINE_QLIST_SCALAR_MARSHALLER(QByteArray, qbytearray)
 DEFINE_QLIST_SCALAR_MARSHALLER(QModelIndex, qmodelindex)
 DEFINE_QLIST_SCALAR_MARSHALLER(QKeySequence, qkeysequence)
+
+// QMap<scalar, scalar> marshalling
+
+#define DEFINE_QMAP_SCALAR_MARSHALLER(KEY_TYPE, VALUE_TYPE, NAME)      \
+  void* \
+  sw_qmap_##NAME##_new(void * place) \
+  { \
+          if (place) { \
+                  *reinterpret_cast<QMap<KEY_TYPE, VALUE_TYPE>*>(place) = QMap<KEY_TYPE, VALUE_TYPE>(); \
+                  return place; \
+          } \
+          return new QMap<KEY_TYPE, VALUE_TYPE>;      \
+  } \
+  void \
+  sw_qmap_##NAME##_delete(void *ptr) \
+  { \
+  	QMap<KEY_TYPE, VALUE_TYPE>* qmap = static_cast<QMap<KEY_TYPE, VALUE_TYPE>*>(ptr); \
+  	delete qmap; \
+  } \
+  void \
+  sw_qmap_##NAME##_map(void *ptr, map_func f) \
+  { \
+  	QMap<KEY_TYPE, VALUE_TYPE>* qmap = static_cast<QMap<KEY_TYPE, VALUE_TYPE>*>(ptr); \
+        QMapIterator<KEY_TYPE, VALUE_TYPE> iter(*qmap); \
+        while (iter.hasNext()) { \
+                iter.next(); \
+                f(&iter.key(), &iter.value()); \
+        } \
+  } \
+  void \
+  sw_qmap_##NAME##_set(void *ptr, void *key, void *value)   \
+  { \
+  	QMap<KEY_TYPE, VALUE_TYPE>* qmap = static_cast<QMap<KEY_TYPE, VALUE_TYPE>*>(ptr); \
+  	(*qmap)[*static_cast<KEY_TYPE*>(key)] = *static_cast<VALUE_TYPE*>(value); \
+  }
+
+DEFINE_QMAP_SCALAR_MARSHALLER(QString, QVariant, qstring_qvariant);

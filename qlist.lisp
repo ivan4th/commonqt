@@ -65,7 +65,8 @@
     (unwind-protect
          (progn
            (dolist (v value)
-             (sw_qlist_qvariant_append qlist (qobject-pointer (qvariant v))))
+             (with-object (variant (qvariant v))
+               (sw_qlist_qvariant_append qlist (qobject-pointer variant))))
            (funcall cont qlist))
       (when (cffi:null-pointer-p place)
         (sw_qlist_qvariant_delete qlist)))))
