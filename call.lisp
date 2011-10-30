@@ -62,7 +62,10 @@
                    (result (override fun object <method> args))
                    (rtype (qmethod-return-type <method>)))
               (unless (qtype-void-p rtype)
-                (marshal result rtype stack (lambda ())))
+                ;; Invoke MARSHAL with no continuation so that
+                ;; the object correspoding to return value isn't
+                ;; deleted. It will be deleted later by libsmoke*.
+                (marshal result rtype stack))
               1)
             0))
     (abort ()

@@ -524,6 +524,9 @@
                         (error "QT_METACALL-OVERRIDE: invalid property id ~A" id)))
               (reply-type (or (nth-value 1 (ensure-member-types prop))
                               (error "bad type for property ~A" (entry-name prop)))))
+         ;; TBD: assign zero to ptr values on error!!! (leaving them unchanged causes crashes)
+         ;; add safety option to catch null ptr references / deleted object references
+         ;; (slower, but safer) (maybe use global declarations)
          (assign
           (funcall (entry-read prop) object)
           reply-type

@@ -3,7 +3,7 @@
 ;;; marshalling
 
 (defmarshal (value place (:|QStringList| :|const QStringList&|) :around cont :type list)
-  (let ((qstringlist (sw_qstringlist_new place)))
+  (let ((qstringlist (sw_qstringlist_new (place-pointer place))))
     (unwind-protect
          (progn
            (dolist (str value)
@@ -12,11 +12,11 @@
                     (sw_qstringlist_append qstringlist char*)
                  (cffi:foreign-free char*))))
            (funcall cont qstringlist))
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_qstringlist_delete qstringlist)))))
 
 (defmarshal (value place (:|QList<int>| :|const QList<int>&|) :around cont :type list)
-  (let ((qlist (sw_qlist_int_new place)))
+  (let ((qlist (sw_qlist_int_new (place-pointer place))))
     (unwind-protect
          (progn
            (dolist (v value)
@@ -24,14 +24,14 @@
                (setf (cffi:mem-ref vptr :int) v)
                (sw_qlist_int_append qlist vptr)))
            (funcall cont qlist))
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_qlist_int_delete qlist)))))
 
 (defmacro define-object-ptr-list-marshaller (type-name)
   (let ((type-1 (alexandria:make-keyword (format nil "QList<~A*>" type-name)))
         (type-2 (alexandria:make-keyword (format nil "const QList<~A*>&" type-name))))
     `(defmarshal (value place (,type-1 ,type-2) :around cont :type list)
-       (let ((qlist (sw_qlist_void_new place))
+       (let ((qlist (sw_qlist_void_new (place-pointer place)))
              (element-class (with-cache () (find-qclass ,type-name))))
          (unwind-protect
               (progn
@@ -41,14 +41,14 @@
                     (error "cannot marshal list element ~s as ~s" v ,type-name))
                   (sw_qlist_void_append qlist (qobject-pointer v)))
                 (funcall cont qlist))
-           (when (cffi:null-pointer-p place)
+           (when (must-delete-object-p place)
              (sw_qlist_void_delete qlist)))))))
 
 (define-object-ptr-list-marshaller "QObject")
 (define-object-ptr-list-marshaller "QStandardItem")
 
 (defmarshal (value place (:|QList<QByteArray>| :|const QList<QByteArray>&|) :around cont :type list)
-  (let ((qlist (sw_qlist_qbytearray_new place)))
+  (let ((qlist (sw_qlist_qbytearray_new (place-pointer place))))
     (unwind-protect
          (progn
            (dolist (v value)
@@ -57,18 +57,18 @@
                     (sw_qlist_qbytearray_append qlist vptr)
                  (sw_delete_qbytearray vptr))))
            (funcall cont qlist))
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_qlist_qbytearray_delete qlist)))))
 
 (defmarshal (value place (:|QList<QVariant>| :|const QList<QVariant>&|) :around cont :type list)
-  (let ((qlist (sw_qlist_qvariant_new place)))
+  (let ((qlist (sw_qlist_qvariant_new (place-pointer place))))
     (unwind-protect
          (progn
            (dolist (v value)
              (with-object (variant (qvariant v))
                (sw_qlist_qvariant_append qlist (qobject-pointer variant))))
            (funcall cont qlist))
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_qlist_qvariant_delete qlist)))))
 
 (defmacro define-copyable-object-list-marshaller (type-name)
@@ -78,7 +78,7 @@
         (append-func (qlist-function-name type-name 'append))
         (delete-func (qlist-function-name type-name 'delete)))
     `(defmarshal (value place (,type-1 ,type-2) :around cont :type list)
-       (let ((qlist (,new-func place))
+       (let ((qlist (,new-func (place-pointer place)))
              (element-class (with-cache () (find-qclass ,type-name))))
          (unwind-protect
               (progn
@@ -88,7 +88,7 @@
                     (error "cannot marshal list element ~s as ~s" v ,type-name))
                   (,append-func qlist (qobject-pointer v)))
                 (funcall cont qlist))
-           (when (cffi:null-pointer-p place)
+           (when (must-delete-object-p place)
              (,delete-func qlist)))))))
 
 (define-copyable-object-list-marshaller "QModelIndex")

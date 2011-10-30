@@ -66,7 +66,11 @@
         (resolve-cast <from> <to>)
       (perform-cast obj fn <from> <cto>))))
 
-(defun marshal (value type stack-item cont)
+(defun marshal (value type stack-item &optional cont)
+  "Marshal value using specified target TYPE into STACK-ITEM which should
+  be a pointer to |union StackItem| structure. If CONT is non-NIL,
+  call it and then delete any objects created during marshalling.
+  If CONT is NIL, don't delete anything."
   (funcall (marshaller value type) value stack-item nil cont))
 
 ;; FIXME: trying to reuse the marshaller causes memory fault
@@ -158,26 +162,28 @@
              (funcall set-thunk
                       (funcall primary-thunk value (cffi:null-pointer))
                       stack-item))
-         (funcall cont)))
+         (when cont (funcall cont))))
       ((and around-thunk (subtypep obj-type around-type))
        (named-lambda marshal-around-outer (value stack-item assignment-p cont)
          (funcall around-thunk
                   value
-                  (if assignment-p stack-item (cffi:null-pointer))
+                  (cond (assignment-p stack-item)
+                        ((null cont) :keep)
+                        (t nil))
                   (named-lambda marshal-around-inner (new-value)
                     (unless assignment-p
                       (funcall set-thunk new-value stack-item))
-                    (funcall cont)))))
+                    (when cont (funcall cont))))))
       ((eq :pointer (qtype-kind <type>))
        (named-lambda marshal-default (value stack-item assignment-p cont)
          (declare (ignore assignment-p))
          (funcall set-thunk value stack-item)
-         (funcall cont)))
+         (when cont (funcall cont))))
       (t
        (named-lambda marshal-default (value stack-item assignment-p cont)
          (unless (and assignment-p (eq slot 'class))
            (funcall set-thunk value stack-item)
-           (funcall cont)))))))
+           (when cont (funcall cont))))))))
 
 (defmacro defmarshal ((var place name &key around (type t)) &body body)
   (if (consp name)
@@ -193,29 +199,43 @@
                    (cons ',type (named-lambda ,function-name (,var ,place) ,@body))
                    (get ',name 'marshaller/around) nil)))))
 
+;; place values:
+;; NIL     = delete the marshalled object after calling continuation
+;; :KEEP   = keep the marshalled object after calling continuation
+;; pointer = use assignment operation
+
+(defun place-pointer (place)
+  (case place
+    ((nil :keep) (cffi:null-pointer))
+    (t place)))
+
+(defun must-delete-object-p (place)
+  (or (null place)
+      (cffi:null-pointer-p place)))
+
 (defmarshal (value place (:|QString| :|const QString&|) :around cont :type string)
-  (let ((qstring (sw_make_qstring value place)))
+  (let ((qstring (sw_make_qstring value (place-pointer place))))
     (unwind-protect
          (funcall cont qstring)
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_delete_qstring qstring)))))
 
 ;;; Don't delete the string because it may be used afterwards by Qt
 (defmarshal (value place :|QString*| :around cont :type string)
-  (funcall cont (sw_make_qstring value place)))
+  (funcall cont (sw_make_qstring value (place-pointer place))))
 
 (defmarshal (value place (:|const char*| |unsigned char*| |char*|) :around cont :type string)
   (let ((char* (cffi:foreign-string-alloc value)))
     (unwind-protect
          (funcall cont char*)
-      (if (cffi:null-pointer-p place)
-          (cffi:foreign-free char*)
-          ;; TBD: WARN
-          (error "place specified for char*, possible memory leak")))))
+      (cond ((must-delete-object-p place)
+             (cffi:foreign-free char*))
+            ((not (eq :keep place))
+             (warn "place specified for char*, possible memory leak"))))))
 
 (defmarshal (value place (:|QByteArray| :|const QByteArray&|) :around cont :type string)
-  (let ((qbytearray (sw_make_qbytearray value place)))
+  (let ((qbytearray (sw_make_qbytearray value (place-pointer place))))
     (unwind-protect
          (funcall cont qbytearray)
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_delete_qbytearray qbytearray)))))

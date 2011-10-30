@@ -1,7 +1,7 @@
 (in-package :qt)
 
 (defmarshal (value place (:|QMap<QString,QVariant>| :|const QMap<QString,QVariant>&|) :around cont :type list)
-  (let ((qmap (sw_qmap_qstring_qvariant_new place)))
+  (let ((qmap (sw_qmap_qstring_qvariant_new (place-pointer place))))
     (unwind-protect
          (progn
            (iter (for (k . v) in value)
@@ -14,7 +14,7 @@
                            (qobject-pointer variant))
                        (sw_delete_qstring qstr)))))
            (funcall cont qmap))
-      (when (cffi:null-pointer-p place)
+      (when (must-delete-object-p place)
         (sw_qmap_qstring_qvariant_delete qmap)))))
 
 (define-marshalling-test (value :|QMap<QString,QVariant>|)

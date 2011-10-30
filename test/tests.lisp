@@ -406,6 +406,41 @@
   ("anotherprop" "int" t t nil)
   ("color" "QColor" t nil "colorChanged()"))
 
+(defclass sample-model ()
+  ()
+  (:metaclass qt-class)
+  (:qt-superclass "QAbstractListModel")
+  (:override ("rowCount" sample-model-row-count)
+             ("data" sample-model-data)))
+
+(defmethod initialize-instance :after ((model sample-model) &key parent &allow-other-keys)
+  (if parent
+      (new model parent)
+      (new model)))
+
+(defmethod sample-model-row-count ((model sample-model) parent)
+  (declare (ignore parent))
+  1)
+
+(defmethod sample-model-data ((model sample-model) index role)
+  #+nil
+  (with-open-file (f "/tmp/sampmodat" :direction :output
+                     :if-does-not-exist :create
+                     :if-exists :append)
+    (format f "~A ~A ~A~%" (#_row index) (#_column index) role))
+  (if (and (= 0 (#_row index))
+           (= 0 (#_column index))
+           (= (primitive-value (#_Qt::DisplayRole)) role))
+      "test"
+      (#_new QVariant)))
+
+(deftest/qt test-model
+  (let ((model (make-instance 'sample-model)))
+    (iter (for idx in (#_match model (#_index model 0 0) (#_Qt::DisplayRole) "test"))
+          (collect
+              (cons (#_row idx) (#_column idx)))))
+  ((0 . 0)))
+
 ;; SBCL cannot handle foreign thread callbacks at the moment
 ;; QML doesn't work there
 #-sbcl

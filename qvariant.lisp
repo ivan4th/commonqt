@@ -2,15 +2,17 @@
 (named-readtables:in-readtable :qt)
 
 (defmarshal (value place (:|QVariant| :|const QVariant&|) :around cont)
-  (cond ((cffi:null-pointer-p place)
+  (cond ((null place)
          (with-object (v (qvariant value))
            (funcall cont v)))
+        ((eq place :keep)
+         (funcall cont (qvariant value)))
         (t
          (#_operator= (%qobject
                        (with-cache () (qtype-class (find-qtype "QVariant")))
-                       place)
+                       (place-pointer place))
                       value)
-         (funcall cont place))))
+         (funcall cont (place-pointer place)))))
 
 (defun qvariant-ptr-types ()
   (with-cache ()
