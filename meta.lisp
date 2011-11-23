@@ -104,10 +104,15 @@
   (let ((ptr (qobject-pointer object)))
    ; (assert (null (pointer->cached-object ptr)))
     (setf (pointer->cached-object ptr) object)
-    (map-cpl (lambda (super)
-               (setf (pointer->cached-object (%cast object super))
-                     object))
-             (qobject-class object))
+    (assert (qobject-class object))
+    (map-cpl-using-result (lambda (super casted)
+                            (let ((ptr (%cast casted super)))
+                              (setf (pointer->cached-object ptr) object)
+                              (make-instance 'qobject
+                                             :class super
+                                             :pointer ptr)))
+                          (qobject-class object)
+                          object)
     (when (typep object 'dynamic-object)
       (setf (gethash (cffi:pointer-address ptr) *strongly-cached-objects*)
             object)))
@@ -227,7 +232,7 @@
   ;; into the DEFCLASS expansion like slots and init functions can, but
   ;; those are special built-in features of DEFCLASS which meta classes
   ;; cannot implement for their own options.  Big oversight in the MOP IMNSHO.
-  (typecase form
+  (etypecase (macroexpand form)
     ((or symbol function)
      form)
     ((cons (eql lambda) t)

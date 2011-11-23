@@ -58,15 +58,22 @@
 (defvar *module-data-table*
   (make-array (ash 1 +module-bits+) :initial-element nil))
 
+(defvar *string-table-table*
+  (make-array (ash 1 +module-bits+) :initial-element nil))
+
 (declaim (type (simple-array t (#.(expt 2 +module-bits+)))
                *module-table*
-               *module-data-table*))
+               *module-data-table*
+               *string-table-table*))
 
 (declaim (inline module-ref))
 (defun module-ref (i) (svref *module-table* i))
 
 (declaim (inline data-ref))
 (defun data-ref (i) (svref *module-data-table* i))
+
+(declaim (inline string-table-ref))
+(defun string-table-ref (i) (svref *string-table-table* i))
 
 ;;;;
 ;;;; Bit bashing
@@ -347,12 +354,30 @@
 (deflistify list-methodmap-methods map-methodmap-methods
   <methodmap>)
 
+;;; Cache all methodnames of the module as Lisp strings.  This is an
+;;; exception from how CommonQt usually accesses smoke data, in that we
+;;; normally access the C++ data structures directly instead of
+;;; rebuilding them as Lisp objects, in order to reduce startup overhead.
+;;;
+;;; However, while integer fields of C++ structures can be accessed from
+;;; Lisp as quickly as native Lisp objects, the same isn't true for
+;;; strings, which need to go through Babel, a relatively expensive
+;;; step.  By pre-caching babel results, we can work on Lisp strings
+;;; natively.
+(defun initialize-string-table (<module>)
+  (let* ((module-data (data-ref <module>))
+         (cstrings (data-methodnames module-data))
+         (n (data-nmethodnames module-data))
+         (n+1 (1+ n))
+         (table (make-array n+1)))
+    (dotimes (i n+1)
+      (setf (elt table i) (cffi:mem-aref cstrings :string i)))
+    (setf (svref *string-table-table* <module>) table)))
+
 (defun name-ref (<module> idx)
   (declare (type module-number <module>))
   (declare (type index idx))
-  (cffi:mem-aref (data-methodnames (data-ref <module>))
-                 :string
-                 idx))
+  (elt (string-table-ref <module>) idx))
 
 (declaim (inline methodmap-name-index))
 (defun methodmap-name-index (<methodmap>)
@@ -927,6 +952,7 @@
                     (cffi:callback method-invocation-callback)
                     (cffi:callback child-callback)))
         (incf *n-modules*)
+        (initialize-string-table idx)
         idx))))
 
 (defun unload ()

@@ -514,3 +514,81 @@
 ;; more info: http://groups.google.com/group/comp.lang.lisp/browse_thread/thread/5dc4b144bad8b58c?pli=1
 ;; Seems like REINITIALIZE-INSTANCE should redo the finalization both on
 ;; the class being redefined and its subclasses.
+
+(defclass override-object-name ()
+  ((name :initarg :name
+         :accessor test-name))
+  (:metaclass qt-class)
+  (:qt-superclass "QObject")
+  (:override ("objectName" override-object-name)))
+
+(defmethod initialize-instance :after ((instance override-object-name) &key)
+  (new instance))
+
+(defun override-object-name (x)
+  (if (slot-boundp x 'name)
+      (test-name x)
+      (call-next-qmethod)))
+
+(deftest/qt override-object-name
+  (with-object (x (make-instance 'override-object-name))
+    (assert (equal (#_objectName x) ""))
+    (setf (test-name x) "test")
+    (assert (equal (#_objectName x) "test"))
+    t)
+  t)
+
+(defmacro override/macroexpand (x)
+  `(lambda (y) (format nil ',x (test-name y))))
+
+(defclass override/macroexpand (override-object-name)
+    ((name :initarg :name
+	   :accessor test-name))
+  (:metaclass qt-class)
+  (:qt-superclass "QObject")
+  (:override ("objectName" (override/macroexpand "<<<~A>>>"))))
+
+(deftest/qt override/macroexpand
+  (with-object (x (make-instance 'override/macroexpand :name "xyz"))
+    (assert (equal (#_objectName x) "<<<xyz>>>"))
+    t)
+  t)
+
+(deftest/qt override/invalid-function-specification
+    (let* ((c (gentemp))		;zzz gensym doesn't work
+	   (m (gensym))
+	   (form `(defclass ,c ()
+		    ()
+		    (:metaclass qt-class)
+		    (:qt-superclass "QObject")
+		    (:override ("objectName" (,m))))))
+      ;;
+      ;; assert that evaluation of the DEFCLASS form fails because M is
+      ;; not defined.
+      ;;
+      (handler-case
+	  (eval form)
+	(:no-error (x)
+	  (error "expected an error, but got ~A" x))
+	(error ()
+	  ;;
+	  ;; Now define M and check the same evaluation now works:
+	  ;;
+	  (setf (macro-function m)
+		(lambda (whole env)
+		  (declare (ignore whole env))
+		  '(lambda (x) (declare (ignore x)) "dummy")))
+	  (eval form)
+	  (eval `(defmethod initialize-instance :after ((instance ,c) &key)
+		   (new instance)))
+	  (with-object (instance (make-instance c))
+	    (assert (equal (#_objectName instance) "dummy")))
+	  t)))
+  t)
+
+(deftest/qt new-qwebview
+    (progn
+      (ensure-smoke :qtwebkit)
+      (with-object (x (#_new QWebView)))
+      t)
+  t)
