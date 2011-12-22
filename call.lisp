@@ -227,12 +227,6 @@
   (note-lisp-type-for-qtype :|const char*| 'string)
   (note-lisp-type-for-qtype :|const QList<int>&| 'qlist<int>))
 
-(defvar *marshalling-tests* (make-hash-table))
-
-(defmacro define-marshalling-test ((var type) &body body)
-  `(setf (gethash ,type *marshalling-tests*)
-         #'(lambda (,var) ,@body)))
-
 (defun can-marshal-p (lisp-object <type>)
   (let ((slot (qtype-stack-item-slot <type>)))
     (alexandria:if-let ((test (gethash (qtype-interned-name

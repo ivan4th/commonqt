@@ -215,6 +215,12 @@
   (or (null place)
       (cffi:null-pointer-p place)))
 
+(defvar *marshalling-tests* (make-hash-table))
+
+(defmacro define-marshalling-test ((var type) &body body)
+  `(setf (gethash ,type *marshalling-tests*)
+         #'(lambda (,var) ,@body)))
+
 (defmarshal (value place (:|QString| :|const QString&|) :around cont :type string)
   (let ((qstring (sw_make_qstring value (place-pointer place))))
     (unwind-protect
@@ -241,3 +247,27 @@
          (funcall cont qbytearray)
       (when (must-delete-object-p place)
         (sw_delete_qbytearray qbytearray)))))
+
+(defmarshal (value place :|long long| :around cont :type integer)
+  (if (must-delete-object-p place)
+      (cffi:with-foreign-object (v :long-long)
+        (setf (cffi:mem-ref v :long-long) value)
+        (funcall cont v))
+      (let ((v (cffi:foreign-alloc :long-long)))
+        (funcall cont v))))
+
+(define-marshalling-test (value :|long long|)
+  (and (integerp value)
+       (<= #.(- (expt 2 63)) value #.(1- (expt 2 63)))))
+
+(defmarshal (value place :|unsigned long long| :around cont :type integer)
+  (if (must-delete-object-p place)
+      (cffi:with-foreign-object (v :unsigned-long-long)
+        (setf (cffi:mem-ref v :unsigned-long-long) value)
+        (funcall cont v))
+      (let ((v (cffi:foreign-alloc :unsigned-long-long)))
+        (funcall cont v))))
+
+(define-marshalling-test (value :|unsigned long long|)
+  (and (integerp value)
+       (<= 0 value #.(1- (expt 2 64)))))

@@ -122,3 +122,11 @@
 
 (def-unmarshal (value "QVariant" type)
   (unvariant value type))
+
+(def-unmarshal (value "long long" type)
+  ;; FIXME: must free it, but not here!!!
+  (cffi:mem-ref value :long-long))
+
+(def-unmarshal (value "unsigned long long" type)
+  ;; FIXME: must free it, but not here!!! (see above)
+  (cffi:mem-ref value :unsigned-long-long))

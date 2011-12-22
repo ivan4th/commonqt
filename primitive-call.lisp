@@ -291,7 +291,9 @@
            (lambda (stack)
              (call-class-fun classfn method-index casted-instance-pointer
                              stack)
-             (funcall return-value-function stack))))
+             (funcall return-value-function stack)
+             ;; TBD: must dealloc 'semi-primitive' types here (qint64, quint64)
+             )))
 
 (defun argstep-marshaller (for-values argtypes i)
   (if argtypes
