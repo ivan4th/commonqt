@@ -66,6 +66,7 @@
   (let ((<from> (qobject-class obj)))
     (multiple-value-bind (fn <cto>)
         (resolve-cast <from> <to>)
+      (assert <cto> () (error "cannot cast ~s to ~s" obj <to>))
       (perform-cast obj fn <from> <cto>))))
 
 (defun marshal (value type stack-item &optional cont)
