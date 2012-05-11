@@ -681,7 +681,7 @@
            (if (< tp (primitive-value (#_QMetaType::User))) tp 0)))))
 
 (defun property-flags (prop)
-  (logior (ash (meta-type-value (entry-type prop)) 24)
+  (logior (ash (logand (meta-type-value (entry-type prop)) 255) 24)
           +Readable+
           (if (entry-write prop) +Writable+ 0)
           ;; FIXME: these should be configurable
@@ -741,9 +741,9 @@
         (dolist (entry properties)
           (add (or (entry-notify entry) 0))))
       (add 0))
-    (let ((dataptr (cffi:foreign-alloc :int :count (length data))))
+    (let ((dataptr (cffi:foreign-alloc :uint32 :count (length data))))
       (dotimes (i (length data))
-        (setf (cffi:mem-aref dataptr :int i) (elt data i)))
+        (setf (cffi:mem-aref dataptr :uint32 i) (elt data i)))
       (cache!
        (%qobject (find-qclass "QMetaObject")
                  (sw_make_metaobject (qobject-pointer parent)
