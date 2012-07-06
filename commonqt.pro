@@ -7,5 +7,5 @@ CONFIG      += qt thread debug dll
 target.path =  $$[QT_INSTALL_LIBS]
 INSTALLS    += target
 
-unix:LIBS += -lsmokeqtcore
+unix:LIBS += -lsmokeqtcore -lsmokebase
 win32:LIBS += smokeqtcore.lib
