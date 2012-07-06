@@ -37,6 +37,7 @@ typedef struct SmokeData {
 
 EXPORT void sw_init();
 EXPORT void sw_smoke(Smoke *, SmokeData *data, void *, void *, void *);
+EXPORT void sw_shutdown(SmokeData *data);
 EXPORT void* sw_make_qbytearray(char *, void *);
 EXPORT void sw_delete_qbytearray(void *q);
 EXPORT void* sw_make_qstring(char *, void *);

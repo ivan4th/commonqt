@@ -923,6 +923,10 @@
   (unless *loaded*
     (reload)))
 
+(defun shutdown-smoke ()
+  (iter (for idx from 0 below *n-modules*)
+        (sw_shutdown (svref *module-data-table* idx))))
+
 (defun ensure-smoke (name)
   (ensure-loaded)
   (let ((name (string-downcase name)))

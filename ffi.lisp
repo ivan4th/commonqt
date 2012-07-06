@@ -76,6 +76,9 @@
   (method-callback :pointer)
   (child-callback :pointer))
 
+(defcfun "sw_shutdown" :void
+  (data :pointer))
+
 (defcfun "sw_windows_version" :int)
 
 (defcfun "sw_install_message_handler" :void

@@ -21,6 +21,10 @@ typedef void (*t_deletion_callback)(void*, void*);
 typedef bool (*t_callmethod_callback)(void*, short, void*, void*, bool);
 typedef void (*t_child_callback)(void*, bool, void*);
 
+void dummy_deletion_callback(void*, void*) {}
+bool dummy_callmethod_callback(void*, short, void*, void*, bool) { return false; }
+void dummy_child_callback(void*, bool, void*) {}
+
 class Binding : public SmokeBinding
 {
 public:
@@ -122,6 +126,16 @@ sw_smoke(Smoke* smoke,
 
         data->thin = binding;
         data->fat = dynamicBinding;
+}
+
+void sw_shutdown (SmokeData* data)
+{
+        static_cast<Binding*>(data->fat)->deletion_callback = dummy_deletion_callback;
+        static_cast<Binding*>(data->fat)->callmethod_callback = dummy_callmethod_callback;
+        static_cast<Binding*>(data->fat)->child_callback = dummy_child_callback;
+        static_cast<Binding*>(data->thin)->deletion_callback = dummy_deletion_callback;
+        static_cast<Binding*>(data->thin)->callmethod_callback = dummy_callmethod_callback;
+        static_cast<Binding*>(data->thin)->child_callback = dummy_child_callback;
 }
 
 int
