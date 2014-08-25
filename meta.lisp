@@ -398,6 +398,8 @@
 
 (defun ensure-qt-class-caches (qt-class)
   (check-type qt-class qt-class)
+  (unless (c2mop:class-finalized-p qt-class)
+    (c2mop:finalize-inheritance qt-class))
   (with-slots (effective-class qmetaobject smoke-generation generation)
       qt-class
     (unless (and qmetaobject
