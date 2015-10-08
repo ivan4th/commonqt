@@ -236,7 +236,8 @@
              (let ((smoke (cffi:mem-ref &smoke :pointer)))
                (unless (cffi:null-pointer-p smoke)
                  (bash (cffi:mem-ref &index :short)
-                       (module-number smoke)
+                       (or (module-number smoke)
+                           (error "unable to get module number for ~s" name))
                        +class+)))))
          (when errorp
            (error "class not found: ~A" name))))))
