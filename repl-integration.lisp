@@ -63,7 +63,7 @@
                 (apply #'values (form-result notifier)))
                (t
                 ;; FIXME: this is perhaps poor substitute
-                (format *debug-io* ";; Evaluation aborted")
+                (format *debug-io* ";; Evaluation aborted~%")
                 (values))))
     (slot-makunbound notifier 'pending-form)
     (slot-makunbound notifier 'form-result)))
