@@ -44,15 +44,18 @@
   #+sbcl
   (sb-sys:enable-interrupt sb-unix:sigchld :default)
   (cffi:load-foreign-library
-   #-(or windows mswindows win32 arm)
-   (namestring (merge-pathnames "libcommonqt.so"
-                                (asdf::component-relative-pathname
-                                 (asdf:find-system :qt))))
+   #-(or windows mswindows win32)
+   `(:or
+     "libcommonqt.so"
+     ,(namestring (merge-pathnames "libcommonqt.so"
+                                   (asdf::component-relative-pathname
+                                    (asdf:find-system :qt)))))
    #+(or windows mswindows win32)
+   "commonqt.dll"
+   #+nil
    (namestring (merge-pathnames "debug/commonqt.dll"
                                 (asdf::component-relative-pathname
-                                 (asdf:find-system :qt))))
-   #+arm "libcommonqt.so")
+                                 (asdf:find-system :qt)))))
   (setf *library-loaded-p* t))
 
 #-(or ccl

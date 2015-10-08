@@ -13,10 +13,10 @@
 
 (defmethod output-files ((operation compile-op) (c cpp->so))
   (values
-    (loop for filename in '("libcommonqt.so" "libcommonqt.so.1"
-                            "libcommonqt.so.1.0" "libcommonqt.so.1.0.0")
-          collect (merge-pathnames filename (component-pathname c)))
-    ;; libcommonqt.so* files are never moved to separate FASL directory
+    (loop for suffix in '("" ".1" ".1.0" ".1.0.0")
+          collect (merge-pathnames (format nil "lib~A.so~A" (component-name c) suffix)
+                                   (component-pathname c)))
+    ;; lib*.so* files are never moved to separate FASL directory
     t))
 
 (defmethod perform ((o load-op) (c cpp->so))
@@ -27,10 +27,14 @@
     (when (find-package :qt)
       (set (find-symbol "*LOADED*" :qt) nil))
     (unless (zerop (run-shell-command
-                    "if which gmake; then gmake -C ~S; else make -C ~:*~S; fi"
+                    "if which gmake; then gmake -C ~S -f ~S; else make -C ~2:*~S -f ~S; fi"
                     (namestring
                      (make-pathname :name nil
                                     :type nil
+                                    :defaults (component-pathname c)))
+                    (namestring
+                     (make-pathname :name (format nil "Makefile")
+                                    :type (component-name c)
                                     :defaults (component-pathname c)))))
       (error 'operation-error :component c :operation o))))
 
@@ -46,7 +50,7 @@
 ;; that places the output into some FASL directory
 (defmethod output-files :around ((operation compile-op) (c makefile))
   (list (make-pathname :name "Makefile"
-		       :type nil
+		       :type (pathname-name (component-pathname c))
 		       :defaults (component-pathname c))))
 
 (defmethod perform ((o load-op) (c makefile))
@@ -58,18 +62,16 @@
       (set (find-symbol "*LOADED*" :qt) nil))
     (unless (zerop (run-shell-command
                     "qmake ~S -o ~S"
-                    (namestring
-		     (merge-pathnames "commonqt.pro" (component-pathname c)))
+                    (namestring (component-pathname c))
                     (namestring (output-file o c))))
       (error 'operation-error :component c :operation o))))
-
 
 ;;; system
 
 (defsystem :qt
     :serial t
-    :components (#-(or mswindows windows win32) (makefile "commonqt.pro")
-                 #-(or mswindows windows win32) (cpp->so "commonqt")
+    :components (#-(or mswindows windows win32 arm) (makefile "commonqt.pro")
+                 #-(or mswindows windows win32 arm) (cpp->so "commonqt")
                  (:file "package")
                  (:file "utils")
                  (:file "ffi")
