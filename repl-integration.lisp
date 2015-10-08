@@ -105,7 +105,10 @@
     (ensure-smoke :qtgui)
     (setf *notifier* (make-instance 'repl-notifier)
           *gui-thread*
-          (let ((global-values (mapcar #'symbol-value *globals*)))
+          (let ((global-values (mapcar #'symbol-value *globals*))
+                (lock (bt:make-lock))
+                (cv (bt:make-condition-variable))
+                (ready nil))
             (bt:make-thread
              #'(lambda ()
                  (loop for var in *globals*
@@ -115,7 +118,14 @@
                        *executer* (make-instance 'repl-executer
                                                  :notifier *notifier*))
                  (#_setQuitOnLastWindowClosed *qapp* nil)
-                 (#_exec *qapp*)))))
+                 (bt:with-lock-held (lock)
+                   (setf ready t)
+                   (bt:condition-notify cv))
+                 (#_exec *qapp*)))
+            (loop
+              (bt:with-lock-held (lock)
+                (when ready (return))
+                (bt:condition-wait cv lock)))))
     (install-debug-io-message-handler)
     (when (and install-repl-hook (find-package "SWANK"))
       (let ((hooks (find-symbol "*SLIME-REPL-EVAL-HOOKS*" "SWANK")))
